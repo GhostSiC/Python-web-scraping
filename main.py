@@ -1,29 +1,51 @@
-import bs4
 import requests
 from bs4 import BeautifulSoup
 import os
 import texttable as tt
 import re
+from selenium import webdriver
+import time
+
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
 
 class web_class:
     def __init__(self, url):
         self.url = url
-        self._page = requests.get(url)
-        self._soup = BeautifulSoup(self._page.content, "html.parser")
         self.data = []
 
         for x in re.split('/', self.url):
             if "www." in x:
                 self.name = x
 
+        self.connect()
+
+    def connect(self, delay=15):
+
+        self.browser = webdriver.Chrome(executable_path="chromedriver")
+        self.browser.get(self.url)
+
+        try:
+            myElem = WebDriverWait(self.browser, delay).until(EC.presence_of_element_located((By.ID, 'releases-table')))
+            #print(myElem)
+            self.html = self.browser.page_source
+
+            self._soup = BeautifulSoup(self.html, "html.parser")
+
+        except TimeoutException:
+            print("Loading took too much time!")
+
+
     def print_data(self):
         table = tt.Texttable()
-        table.add_rows([(None,None,None,None)] + self.data)
+        table.add_rows([(None, None, None, None)] + self.data)
 
-        table.set_cols_align(("c","c","c","c"))
+        table.set_cols_align(("c", "c", "c", "c"))
         table.header(("Country", "Cases", "Death", "Region"))
         print(f'web site name: {self.name}')
-        print(table.draw()) 
+        print(table.draw())
 
     def change_url(self, url):
         self.url = url
@@ -47,35 +69,34 @@ class web_class:
                 break
 
     def query_country_by_name(self, *args):
-        res = iter(self._soup.find_all('td'))
 
-        #tab_html = self._soup.find("div", class_="table-responsive")
-        #print(tab_html.find_all('td'))
+        elems = self.browser.find_elements(by=By.CLASS_NAME, value="frontpage-releases-container")
+        for i in elems[0].find_elements(by=By.CLASS_NAME, value="badge-wrapper"):
+            for a in i.find_elements(by=By.TAG_NAME, value="a"):
+                if a.text in "1080p":
+                    print(a.text)
+                    print(a.get_attribute("href"))
 
-        while True:
-            try:
-                country = next(res).text
-                cases = next(res).text
-                death = next(res).text
-                region = next(res).text
-                for arg in args:
-                    if country == arg:
-                        self.data.append((
-                            country,
-                            cases.replace(",", ''),
-                            death.replace(",", ''),
-                            region
-                        ))
-            except StopIteration:
-                break
-           
+
+
+
+
+        div_tab_cointtener = self._soup.find("table", {"id": "releases-table"})
+        #print(div_tab_cointtener.find_all('tr'))
+        #print(div_tab_cointtener.find_all('tr'))
+        #tab_html = div_tab_cointtener.find_all("table", class_="releases-table")
+        for i in div_tab_cointtener.find_all('tr'):
+            for a in i.find_all("a"):
+                #for quality in a.find_all("div", {"class":"badge-wrapper"}):
+
+                #print(a)
+
+                pass
+
 
 
 
 if __name__ == "__main__":
     os.system("CLS")
-    web = web_class("https://www.worldometers.info/coronavirus/countries-where-coronavirus-has-spread/")
-    web.query_country_by_name("Saint Helena","Marshall Islands")
-    web.query_country_by_name("Micronesia","Poland")
-    web.print_data()   
-    web.data = []
+    web = web_class("https://subsplease.org")
+    web.query_country_by_name()
