@@ -1,7 +1,6 @@
-
+import requests
 from bs4 import BeautifulSoup
 
-import texttable as tt
 import re
 from selenium import webdriver
 
@@ -10,10 +9,25 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 
-class web_class:
+from selenium.webdriver.chrome.options import Options
+
+from urllib.request import Request, urlopen
+
+class Anime:
+    def __init__(self, name, desc, torrent, date, raw_data_img):
+        self.name = name
+        self.desc = desc
+        self.torrent = torrent
+        self.date = date
+        self.raw_data_img = raw_data_img
+
+
+class WebClass:
     def __init__(self, url):
         self.url = url
         self.data = []
+
+        self.get_anime_form_list()
 
         for x in re.split('/', self.url):
             if "www." in x:
@@ -22,78 +36,55 @@ class web_class:
         self.connect()
 
     def connect(self, delay=15):
-
-        self.browser = webdriver.Chrome(executable_path="chromedriver")
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        self.browser = webdriver.Chrome(executable_path="chromedriver", chrome_options=chrome_options)
         self.browser.get(self.url)
 
         try:
             myElem = WebDriverWait(self.browser, delay).until(EC.presence_of_element_located((By.ID, 'releases-table')))
-            #print(myElem)
             self.html = self.browser.page_source
-
             self._soup = BeautifulSoup(self.html, "html.parser")
 
         except TimeoutException:
             print("Loading took too much time!")
 
-
-    def print_data(self):
-        table = tt.Texttable()
-        table.add_rows([(None, None, None, None)] + self.data)
-
-        table.set_cols_align(("c", "c", "c", "c"))
-        table.header(("Country", "Cases", "Death", "Region"))
-        print(f'web site name: {self.name}')
-        print(table.draw())
-
-    def change_url(self, url):
-        self.url = url
-
     def close_brw(self):
         self.browser.close();
 
-    def get_all_data(self):
-        res = iter(self._soup.find_all('td'))
-        while True:
-            try:
-                country = next(res).text
-                cases = next(res).text
-                death = next(res).text
-                region = next(res).text
+    def get_anime_by_name(self):
+        list_of_anime = []
 
-                self.data.append((
-                    country,
-                    cases.replace(",", ''),
-                    death.replace(",", ''),
-                    region
-                ))
-            except StopIteration:
-                break
+        elems = self.browser.find_elements(by=By.ID, value="releases-table")
+        for tr in elems[0].find_elements(by=By.TAG_NAME, value="tr"):
+            release_item = tr.find_elements(by=By.CLASS_NAME, value="release-item")[0]
+            a_href_rls_item = release_item.find_elements(by=By.TAG_NAME, value="a")[0]
+            name = a_href_rls_item.text
 
-    def query_country_by_name(self, *args):
+            if name.rsplit("—", 1)[0].rstrip() in self.white_list_anime:
 
-        elems = self.browser.find_elements(by=By.CLASS_NAME, value="frontpage-releases-container")
-        for i in elems[0].find_elements(by=By.CLASS_NAME, value="badge-wrapper"):
-            for a in i.find_elements(by=By.TAG_NAME, value="a"):
-                if a.text in "1080p":
-                    print(a.text)
-                    print(a.get_attribute("href")) 
-                    pass
+                url_to_img = a_href_rls_item.get_attribute("data-preview-image")
+                req = requests.get(url_to_img, headers={'User-Agent': 'Mozilla/5.0'})
+                image_byt = req.content
 
+                for badge_wrapper in release_item.find_elements(by=By.CLASS_NAME, value="badge-wrapper"):
+                    for a in badge_wrapper.find_elements(by=By.TAG_NAME, value="a"):
+                        if a.text in "1080p":
+                            torret_url = a.get_attribute("href")
 
+                release_item_time = tr.find_elements(by=By.CLASS_NAME, value="release-item-time")[0]
+                span = release_item_time.find_elements(by=By.TAG_NAME, value="span")[0]
+                date = span.get_attribute("title")
 
+                list_of_anime.append(Anime(name, "mb i add that", torret_url, date, image_byt))
 
+        return list_of_anime
 
-        div_tab_cointtener = self._soup.find("table", {"id": "releases-table"})
-        #print(div_tab_cointtener.find_all('tr'))
-        #print(div_tab_cointtener.find_all('tr'))
-        #tab_html = div_tab_cointtener.find_all("table", class_="releases-table")
-        for i in div_tab_cointtener.find_all('tr'):
-            for a in i.find_all("a"):
-                #for quality in a.find_all("div", {"class":"badge-wrapper"}):
+    def get_anime_form_list(self):
+        f = open("white_list_anime.kkk", "r")
+        self.white_list_anime = []
+        for line in f:
+            line = line.replace("\n", '')
+            self.white_list_anime.append(line)
 
-                #print(a)
-
-                pass
-
-
+        f.close()
